@@ -29,21 +29,52 @@ fn initialize_pager() {
     )
     .unwrap();
 
-    pager::pager_start(queue.object().id(), queue2.object().id());
-
-    tracing::info!("sync call test");
-    twizzler_abi::syscall::sys_object_ctrl(
-        queue.object().id(),
-        twizzler_abi::syscall::ObjectControlCmd::Sync,
+    let pager_comp: CompartmentHandle = monitor_api::CompartmentLoader::new(
+        "pager-srv",
+        "libpager_srv.so",
+        monitor_api::NewCompartmentFlags::EXPORT_GATES,
     )
-    .unwrap();
-    tracing::info!("sync call done!");
+    .args(["pager-srv"])
+    .load()
+    .expect("failed to start pager");
+
+    let pager_start = unsafe {
+        pager_comp
+            .dynamic_gate::<(ObjID, ObjID), ()>("pager_start")
+            .unwrap()
+    };
+    pager_start(queue.object().id(), queue2.object().id());
+    std::mem::forget(pager_comp);
+}
+
+fn initialize_namer() {
+    info!("starting namer");
+
+    let nmcomp: CompartmentHandle = CompartmentLoader::new(
+        "naming",
+        "libnaming_srv.so",
+        NewCompartmentFlags::EXPORT_GATES,
+    )
+    .args(&["naming"])
+    .load()
+    .expect("failed to initialize namer");
+    let mut flags = nmcomp.info().flags;
+    while !flags.contains(CompartmentFlags::READY) {
+        flags = nmcomp.wait(flags);
+    }
+    tracing::info!("naming ready");
+
+    let namer_start = unsafe { nmcomp.dynamic_gate::<(ObjID,), ()>("namer_start").unwrap() };
+    namer_start(ObjID::default());
+
+    std::mem::forget(nmcomp);
 }
 
 fn main() {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
+            .with_max_level(tracing::Level::INFO)
+            .without_time()
             .finish(),
     )
     .unwrap();
@@ -63,21 +94,6 @@ fn main() {
     }
     tracing::info!("logboi ready");
     std::mem::forget(lbcomp);
-
-    let nmcomp: CompartmentHandle = CompartmentLoader::new(
-        "naming",
-        "libnaming_srv.so",
-        NewCompartmentFlags::EXPORT_GATES,
-    )
-    .args(&["naming"])
-    .load()
-    .unwrap();
-    let mut flags = nmcomp.info().flags;
-    while !flags.contains(CompartmentFlags::READY) {
-        flags = nmcomp.wait(flags);
-    }
-    tracing::info!("naming ready");
-    std::mem::forget(nmcomp);
 
     let create = ObjectCreate::new(
         BackingType::Normal,
@@ -119,6 +135,7 @@ fn main() {
     initialize_pager();
     std::mem::forget(dev_comp);
 
+    initialize_namer();
     run_tests("test_bins", false);
     run_tests("bench_bins", true);
 
@@ -176,7 +193,7 @@ fn run_tests(test_list_name: &str, benches: bool) {
         };
         let bytes = &bytes[0..bytes.iter().position(|r| *r == 0).unwrap_or(0)];
         let str = String::from_utf8(bytes.to_vec()).unwrap();
-        let mut test_failed = false;
+        let test_failed = false;
         for line in str.split("\n").filter(|l| !l.is_empty()) {
             println!("STARTING TEST {}", line);
             let test_comp = monitor_api::CompartmentLoader::new(
@@ -201,43 +218,15 @@ fn run_tests(test_list_name: &str, benches: bool) {
     }
 }
 
-/*
-#[naked]
-#[no_mangle]
-extern "C" fn _start() -> ! {
-    unsafe { asm!("call std_runtime_start", options(noreturn)) }
-}
-*/
-
-use std::{
-    sync::{atomic::AtomicU64, Arc, Mutex},
-    time::Duration,
-};
-
 use monitor_api::{CompartmentFlags, CompartmentHandle, CompartmentLoader, NewCompartmentFlags};
 use tracing::{debug, info, warn};
 use twizzler_abi::{
     aux::KernelInitInfo,
-    device::SubObjectType,
-    kso::{KactionCmd, KactionFlags, KactionGenericCmd, KactionValue},
     object::{ObjID, Protections, MAX_SIZE, NULLPAGE_SIZE},
     pager::{CompletionToKernel, RequestFromKernel},
     syscall::{
-        sys_kaction,
-        sys_new_handle,
-        sys_thread_sync,
-        BackingType,
-        LifetimeType, //MapFlags,
-        NewHandleFlags,
-        ObjectCreate,
-        ObjectCreateFlags,
-        ThreadSync,
-        ThreadSyncFlags,
-        ThreadSyncOp,
-        ThreadSyncReference,
-        ThreadSyncSleep,
-        ThreadSyncWake,
+        sys_new_handle, BackingType, LifetimeType, NewHandleFlags, ObjectCreate, ObjectCreateFlags,
+        ThreadSync, ThreadSyncFlags, ThreadSyncOp, ThreadSyncReference, ThreadSyncSleep,
     },
-    thread::{ExecutionState, ThreadRepr},
 };
 use twizzler_object::{CreateSpec, Object, ObjectInitFlags};

@@ -18,8 +18,6 @@ members = [
     "src/bin/stdfs_demo",
     "src/bin/virtio",
     "src/bin/mnemosyne",
-    "src/bin/stdfs_demo",
-    "src/bin/object-store-test",
     "src/bin/virtio",
     "src/kernel",
     "src/lib/twizzler-queue-raw",
@@ -42,11 +40,13 @@ members = [
     "src/srv/pager-srv",
     "src/bin/logboi-test",
     "src/lib/virtio-net",
+    "src/lib/naming/naming-core",
     "src/lib/naming",
     "src/srv/naming-srv", 
     "src/bin/naming-test",
     "src/bin/object-store-test",
-    "src/lib/pager",
+    "src/lib/pager", 
+    "src/bin/ls",
 ]
 
 exclude = ["toolchain/src/rust"]
@@ -68,6 +68,7 @@ initrd = [
     "crate:random_validation",
     "crate:randtest",
     "crate:genrandom",
+    "crate:ls",
     "lib:naming-srv",
     "crate:naming-test",
     "crate:object-store-test",

@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
+#![allow(non_snake_case)]
 
-use twizzler_abi::klog_println;
 // This macro checks that our definition of a function is the same as that
 // defined by the bindings generated from bindgen. Thus the whole ABI
 // is type-checked! The only trick is that you have to specify the number of arguments.
@@ -291,7 +291,9 @@ pub unsafe extern "C-unwind" fn twz_rt_fd_open(info: open_info) -> open_result {
     let name =
         core::str::from_utf8(name).map_err(|_| twizzler_rt_abi::fd::OpenError::InvalidArgument);
     match name {
-        Ok(name) => OUR_RUNTIME.open(name).into(),
+        Ok(name) => OUR_RUNTIME
+            .open(name, info.create.into(), info.flags.into())
+            .into(),
         Err(e) => open_result {
             error: e as u32,
             fd: 0,

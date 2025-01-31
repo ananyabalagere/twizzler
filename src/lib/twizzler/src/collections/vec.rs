@@ -82,7 +82,7 @@ impl<T: Invariant, Alloc: Allocator> Vec<T, Alloc> {
     pub fn get<'a>(&'a self, idx: usize) -> Option<Ref<'a, T>> {
         let r = unsafe { self.inner.start.resolve() };
         let slice = unsafe { RefSlice::from_ref(r, self.inner.len) };
-        slice.get(idx)
+        slice.get(idx).map(|f| f.owned())
     }
 
     pub fn new_in(alloc: Alloc) -> Self {
@@ -143,7 +143,7 @@ impl<T: Invariant + StoreCopy, Alloc: Allocator> Vec<T, Alloc> {
         self.do_push(item, tx)
     }
 
-    pub fn pop(&self, tx: &impl TxHandle) -> Result<T> {
+    pub fn pop(&self, _tx: &impl TxHandle) -> Result<T> {
         todo!()
     }
 }
@@ -165,6 +165,8 @@ impl<T: Invariant, Alloc: Allocator + SingleObjectAllocator> Vec<T, Alloc> {
     }
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use super::*;
     use crate::{
@@ -239,7 +241,7 @@ mod tests {
         }
     }
 
-    //#[test]
+    #[test]
     fn node_push() {
         let simple_obj = ObjectBuilder::default().build(Simple { x: 3 }).unwrap();
         let vobj = ObjectBuilder::<Vec<Node, VecObjectAlloc>>::default()
@@ -262,7 +264,7 @@ mod tests {
         assert_eq!(unsafe { item.ptr.resolve() }.x, 3);
     }
 
-    //#[test]
+    #[test]
     fn vec_object() {
         let simple_obj = ObjectBuilder::default().build(Simple { x: 3 }).unwrap();
         let vo = VecObject::new(ObjectBuilder::default()).unwrap();
@@ -283,7 +285,7 @@ mod tests {
     }
 }
 
-struct VecObject<T: Invariant, A: Allocator> {
+pub struct VecObject<T: Invariant, A: Allocator> {
     obj: Object<Vec<T, A>>,
 }
 
@@ -311,6 +313,10 @@ impl<T: Invariant> VecObject<T, VecObjectAlloc> {
     pub fn get(&self, idx: usize) -> Option<Ref<'_, T>> {
         // TODO: inefficient
         self.obj.base().get(idx).map(|r| r.owned())
+    }
+
+    pub fn len(&self) -> usize {
+        self.obj.base().len()
     }
 }
 
